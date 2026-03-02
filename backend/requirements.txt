@@ -12,7 +12,3 @@ seaborn==0.13.2
 
 # Utilities
 scipy==1.11.4
-
-# OCR & Image Processing
-easyocr==1.7.1
-opencv-python-headless==4.9.0.80

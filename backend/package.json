@@ -13,6 +13,7 @@
     "express": "^4.19.2",
     "matplotlib": "^1.0.0",
     "multer": "^2.1.0",
-    "seaborn": "^0.0.1-security"
+    "seaborn": "^0.0.1-security",
+    "tesseract.js": "^7.0.0"
   }
 }
