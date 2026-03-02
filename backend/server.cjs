@@ -17,7 +17,8 @@ const upload = multer({ dest: "uploads/" });
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://heal-ai-n770.onrender.com"
+    "https://heal-ai-n770.onrender.com",
+    "https://heal-ai-1-dkr8.onrender.com"
   ],
 }));
 
