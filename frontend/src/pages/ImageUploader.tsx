@@ -1,10 +1,12 @@
-import  { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { Upload, AlertCircle, CheckCircle, Image, RefreshCw, Info } from 'lucide-react';
+import { API_URL } from '../config';
 
 const ImageUploader: React.FC = () => {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -12,61 +14,81 @@ const ImageUploader: React.FC = () => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError(null);
     const file = acceptedFiles[0];
-    
+
     // Check if file is an image
     if (!file.type.startsWith('image/')) {
       setError('Please upload an image file (jpg, png, etc.)');
       return;
     }
-    
+
     // Check file size (limit to 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError('File size exceeds 5MB limit');
       return;
     }
-    
+
     // Create a preview URL for the image
     const imageUrl = URL.createObjectURL(file);
     setUploadedImage(imageUrl);
+    setImageFile(file);
     setAnalysisResult(null);
   }, []);
-  
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.gif']
     },
     maxFiles: 1
   });
-  
-  const handleAnalyzeImage = () => {
-    if (!uploadedImage) return;
-    
+
+  const handleAnalyzeImage = async () => {
+    if (!imageFile) return;
+
     setIsAnalyzing(true);
-    
-    // Simulate API call with timeout
-    setTimeout(() => {
-      // Mock analysis results
-      const mockResults = {
-        condition: 'Possible Skin Rash',
-        confidence: 78,
-        description: 'The image appears to show symptoms consistent with a common skin rash. This could be contact dermatitis, eczema, or a mild allergic reaction.',
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', imageFile);
+
+      const response = await fetch(`${API_URL}/api/process-prescription`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to analyze image');
+      }
+
+      const data = await response.json();
+
+      // format for UI
+      const result = {
+        condition: data.predicted_disease || 'Unknown condition',
+        confidence: data.confidence || 0,
+        description: `Extracted text from image: ${data.extracted_text || 'None detected'}\nDetected Symptoms: ${data.detected_symptoms?.length > 0 ? data.detected_symptoms.join(', ') : 'None extracted'}`,
         recommendations: [
-          'Keep the area clean and dry',
-          'Avoid scratching the affected area',
-          'Apply a cold compress to reduce inflammation',
-          'Consider over-the-counter hydrocortisone cream',
-          'Consult with a dermatologist if the rash persists or worsens'
+          'Please consult with a healthcare provider for proper diagnosis.',
+          ...(data.detected_symptoms?.length > 0
+            ? ['Check if the identified symptoms accurately match your condition.']
+            : ['No specific symptoms could be clearly identified in the uploaded image.'])
         ]
       };
-      
-      setAnalysisResult(mockResults);
+
+      setAnalysisResult(result);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'An error occurred during analysis');
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
   };
-  
+
   const resetUpload = () => {
     setUploadedImage(null);
+    setImageFile(null);
     setAnalysisResult(null);
     setError(null);
   };
@@ -74,7 +96,7 @@ const ImageUploader: React.FC = () => {
   return (
     <div className="min-h-screen pt-20 pb-16 bg-gray-50">
       <div className="container-custom max-w-4xl">
-        <motion.div 
+        <motion.div
           className="mb-8 text-center"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -85,12 +107,12 @@ const ImageUploader: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-800">Symptom Image Analysis</h1>
           </div>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            Upload an image of a visible symptom for AI-powered analysis. 
+            Upload an image of a visible symptom for AI-powered analysis.
             Our technology can help identify skin conditions, rashes, eye issues, and more.
           </p>
         </motion.div>
-        
-        <motion.div 
+
+        <motion.div
           className="bg-white rounded-xl shadow-md overflow-hidden"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -98,7 +120,7 @@ const ImageUploader: React.FC = () => {
         >
           <div className="p-6">
             <h2 className="text-xl font-semibold mb-4">Upload Symptom Image</h2>
-            
+
             {/* Error message */}
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
@@ -106,16 +128,15 @@ const ImageUploader: React.FC = () => {
                 <p className="text-red-700 text-sm">{error}</p>
               </div>
             )}
-            
+
             {/* Upload area */}
             {!uploadedImage ? (
-              <div 
-                {...getRootProps()} 
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${
-                  isDragActive 
-                    ? 'border-teal-500 bg-teal-50' 
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all ${isDragActive
+                    ? 'border-teal-500 bg-teal-50'
                     : 'border-gray-300 hover:border-teal-400 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <input {...getInputProps()} />
                 <div className="mx-auto w-16 h-16 mb-4 flex items-center justify-center rounded-full bg-teal-50">
@@ -136,7 +157,7 @@ const ImageUploader: React.FC = () => {
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-medium">Uploaded Image</h3>
-                  <button 
+                  <button
                     onClick={resetUpload}
                     className="text-gray-500 hover:text-gray-700 flex items-center text-sm"
                   >
@@ -145,16 +166,16 @@ const ImageUploader: React.FC = () => {
                   </button>
                 </div>
                 <div className="relative rounded-lg overflow-hidden">
-                  <img 
-                    src={uploadedImage} 
-                    alt="Uploaded symptom" 
+                  <img
+                    src={uploadedImage}
+                    alt="Uploaded symptom"
                     className="w-full max-h-96 object-contain bg-gray-50"
                   />
                 </div>
-                
+
                 {!analysisResult && !isAnalyzing && (
                   <div className="mt-4">
-                    <button 
+                    <button
                       onClick={handleAnalyzeImage}
                       className="bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 transition-colors w-full"
                     >
@@ -162,7 +183,7 @@ const ImageUploader: React.FC = () => {
                     </button>
                   </div>
                 )}
-                
+
                 {/* Loading state */}
                 {isAnalyzing && (
                   <div className="mt-6 flex flex-col items-center">
@@ -172,12 +193,12 @@ const ImageUploader: React.FC = () => {
                 )}
               </div>
             )}
-            
+
             {/* Analysis Results */}
             {analysisResult && (
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Analysis Results</h3>
-                
+
                 <div className="mb-6">
                   <div className="flex justify-between items-center">
                     <h4 className="font-medium text-teal-800">{analysisResult.condition}</h4>
@@ -187,7 +208,7 @@ const ImageUploader: React.FC = () => {
                   </div>
                   <p className="mt-2 text-gray-700">{analysisResult.description}</p>
                 </div>
-                
+
                 <div className="mb-6">
                   <h4 className="font-medium text-gray-800 mb-2">Recommendations:</h4>
                   <ul className="space-y-2">
@@ -199,14 +220,14 @@ const ImageUploader: React.FC = () => {
                     ))}
                   </ul>
                 </div>
-                
+
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
                   <div className="flex items-start">
                     <Info size={20} className="text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
                     <div>
                       <h4 className="font-medium text-blue-800">What to do next?</h4>
                       <p className="text-blue-700 text-sm mt-1">
-                        This analysis is provided for informational purposes only and should not replace professional medical advice. 
+                        This analysis is provided for informational purposes only and should not replace professional medical advice.
                         If you're concerned about your symptoms, please consult with a healthcare provider.
                       </p>
                     </div>
@@ -216,7 +237,7 @@ const ImageUploader: React.FC = () => {
             )}
           </div>
         </motion.div>
-        
+
         {/* Additional Information */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
@@ -236,7 +257,7 @@ const ImageUploader: React.FC = () => {
               content: "Our AI can analyze visible symptoms only. Internal conditions, complex medical issues, or emergencies require immediate medical attention."
             }
           ].map((item, index) => (
-            <motion.div 
+            <motion.div
               key={index}
               className="bg-white p-6 rounded-lg shadow-sm"
               initial={{ opacity: 0, y: 20 }}
@@ -252,7 +273,7 @@ const ImageUploader: React.FC = () => {
             </motion.div>
           ))}
         </div>
-        
+
         {/* Medical Disclaimer */}
         <div className="mt-8 bg-amber-50 border border-amber-200 rounded-lg p-4">
           <div className="flex items-start">
@@ -260,8 +281,8 @@ const ImageUploader: React.FC = () => {
             <div>
               <h3 className="text-amber-800 font-medium">Important Medical Disclaimer</h3>
               <p className="text-amber-700 text-sm mt-1">
-                The image analysis provided by this tool is not a medical diagnosis. It is designed to offer preliminary insights only. 
-                For proper diagnosis and treatment, always consult with a qualified healthcare professional. If you're experiencing severe 
+                The image analysis provided by this tool is not a medical diagnosis. It is designed to offer preliminary insights only.
+                For proper diagnosis and treatment, always consult with a qualified healthcare professional. If you're experiencing severe
                 symptoms, seek immediate medical attention.
               </p>
             </div>
